@@ -15,6 +15,12 @@ const NAV = [
     sub: 'Filter & export',
     icon: <span className="text-[20px] leading-none select-none flex-shrink-0">♞</span>,
   },
+  {
+    id: 'opening',
+    label: 'Opening Explorer',
+    sub: 'Variations & PGN',
+    icon: <span className="text-[20px] leading-none select-none flex-shrink-0">♜</span>,
+  },
 ];
 
 function NavItems({ page, choose }) {

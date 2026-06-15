@@ -453,6 +453,172 @@ app.post('/api/analyze', upload.array('images', 100), async (req, res) => {
   res.json({ diagrams: allDiagrams, fenList, pgn, pgnSource, pageText: textForPGN || null, errors, total: allDiagrams.length });
 });
 
+// ── Opening Explorer ─────────────────────────────────────────────────────────
+
+let ecoCache = null;
+
+async function loadECO() {
+  if (ecoCache) return ecoCache;
+  const all = [];
+  for (const letter of ['a', 'b', 'c', 'd', 'e']) {
+    try {
+      const r = await fetch(
+        `https://raw.githubusercontent.com/lichess-org/chess-openings/master/${letter}.tsv`
+      );
+      if (!r.ok) continue;
+      const lines = (await r.text()).trim().split('\n').slice(1);
+      for (const line of lines) {
+        const [eco, name, pgn] = line.split('\t');
+        if (!eco || !name || !pgn) continue;
+        try {
+          const chess = new Chess();
+          chess.loadPgn(pgn.trim());
+          all.push({ eco, name, pgn: pgn.trim(), fen: chess.fen() });
+        } catch { /* skip invalid */ }
+      }
+    } catch { /* skip file */ }
+  }
+  ecoCache = all;
+  return all;
+}
+
+loadECO()
+  .then(d => console.log(`✓ ECO openings loaded: ${d.length}`))
+  .catch(e => console.warn('ECO preload failed:', e.message));
+
+app.get('/api/opening/list', async (req, res) => {
+  try {
+    const data = await loadECO();
+    res.set('Cache-Control', 'public, s-maxage=86400, stale-while-revalidate=3600');
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+async function openingExplore(fen) {
+  await new Promise(r => setTimeout(r, 100));
+  // Prefer Lichess Masters if a personal token is configured
+  if (process.env.LICHESS_TOKEN) {
+    try {
+      const r = await fetch(
+        `https://explorer.lichess.ovh/masters?fen=${encodeURIComponent(fen)}&moves=15&topGames=0&recentGames=0`,
+        { headers: {
+          'User-Agent': 'ChessTools/1.0 augustin@circlechess.com',
+          'Authorization': `Bearer ${process.env.LICHESS_TOKEN}`,
+        }}
+      );
+      if (r.ok) {
+        const d = await r.json();
+        // Normalise to { moves: [{san, total}] }
+        return { moves: d.moves?.map(m => ({ san: m.san, total: m.white + m.black + m.draws })) || [] };
+      }
+    } catch { /* fall through to ChessDB */ }
+  }
+  // Fallback: ChessDB (free, no auth required)
+  try {
+    const r = await fetch(
+      `https://www.chessdb.cn/cdb.php?action=queryall&board=${encodeURIComponent(fen)}&json=1`,
+      { headers: { 'User-Agent': 'ChessTools/1.0 augustin@circlechess.com' } }
+    );
+    if (!r.ok) return null;
+    const d = await r.json();
+    if (d.status !== 'ok' || !d.moves?.length) return null;
+    // Sort: higher score = better move for side to move
+    const sorted = [...d.moves].sort((a, b) => b.score - a.score);
+    return { moves: sorted.map(m => ({ san: m.san, total: null, score: m.score, winrate: m.winrate })) };
+  } catch { return null; }
+}
+
+async function exploreTree(fen, depth, topMoves, minGames, history = []) {
+  if (depth === 0) return [{ moves: history, fen }];
+  const data = await openingExplore(fen);
+  if (!data?.moves?.length) return [{ moves: history, fen }];
+
+  const chess = new Chess(fen);
+  const candidates = data.moves
+    .filter(m => m.total === null || m.total >= minGames)
+    .slice(0, topMoves);
+
+  if (!candidates.length) return [{ moves: history, fen }];
+
+  const lines = [];
+  for (const mv of candidates) {
+    const applied = chess.move(mv.san);
+    if (!applied) { chess.undo(); continue; }
+    const newFen = chess.fen();
+    chess.undo();
+    const sub = await exploreTree(newFen, depth - 1, topMoves, minGames, [...history, mv.san]);
+    lines.push(...sub);
+  }
+  return lines.length ? lines : [{ moves: history, fen }];
+}
+
+app.get('/api/opening/pgn', async (req, res) => {
+  try {
+    const { eco, depth = 2, topMoves = 3, minGames = 50 } = req.query;
+    if (!eco) return res.status(400).json({ error: 'eco required' });
+
+    const all = await loadECO();
+    const opening = all.find(o => o.eco === eco);
+    if (!opening) return res.status(404).json({ error: `ECO ${eco} not found` });
+
+    let openingHistory = [];
+    if (opening.pgn) {
+      try { const t = new Chess(); t.loadPgn(opening.pgn); openingHistory = t.history(); } catch { /* ignore */ }
+    }
+
+    const lines = await exploreTree(
+      opening.fen,
+      Math.min(+depth, 4),
+      Math.min(+topMoves, 5),
+      Math.max(+minGames, 0)
+    );
+
+    const date = new Date().toISOString().slice(0, 10).replace(/-/g, '.');
+
+    const pgns = lines.map((line, i) => {
+      const allMoves = [...openingHistory, ...line.moves];
+      const varLabel = line.moves.length ? line.moves.join(' ') : 'Main Line';
+      const name = `${opening.name}${line.moves.length ? ': ' + varLabel : ''}`;
+
+      const header = [
+        `[Event "${name}"]`,
+        `[Site "Chess Tools"]`,
+        `[Date "${date}"]`,
+        `[White "?"]`,
+        `[Black "?"]`,
+        `[Result "*"]`,
+      ].join('\n');
+
+      const chess = new Chess();
+      let moveTxt = '';
+      for (const san of allMoves) {
+        if (chess.turn() === 'w') moveTxt += `${chess.moveNumber()}. `;
+        chess.move(san);
+        moveTxt += san + ' ';
+      }
+
+      return {
+        id: i + 1,
+        name,
+        moves: line.moves,
+        openingMoves: openingHistory,
+        pgn: `${header}\n\n${moveTxt.trim()} *`,
+      };
+    });
+
+    res.json({
+      pgns,
+      count: pgns.length,
+      opening: { eco: opening.eco, name: opening.name, fen: opening.fen },
+    });
+  } catch (err) {
+    console.error('Opening PGN error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Static files (local production preview) ───────────────────────────────────
 
 const distPath = join(__dirname, 'dist');
