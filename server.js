@@ -347,22 +347,28 @@ Output ONLY raw PGN. No markdown, no explanation, no code fences.`;
 
 // ── Simple FEN-only PGN builder (fallback) ───────────────────────────────────
 
-function buildFenPGN(diagrams) {
+async function buildFenPGN(diagrams) {
   if (!diagrams.length) return '';
+  const map = await getEcoFenMap();
   const today = new Date().toISOString().slice(0, 10).replace(/-/g, '.');
-  return diagrams.map((d, i) =>
-    `[Event "${d.description || `Position ${i + 1}`}"]
-[Site "PDF to PGN Extractor"]
+  return diagrams.map((d, i) => {
+    const key = normFen(d.fen);
+    const opening = map.get(key);
+    const extra = opening
+      ? `\n[ECO "${opening.eco}"]\n[Opening "${opening.name}"]`
+      : '';
+    return `[Event "${opening?.name || d.description || `Position ${i + 1}`}"]
+[Site "Chess Tools"]
 [Date "${today}"]
 [Round "${i + 1}"]
 [White "?"]
 [Black "?"]
-[Result "*"]
+[Result "*"]${extra}
 [SetUp "1"]
 [FEN "${d.fen}"]
 
-*`
-  ).join('\n\n');
+*`;
+  }).join('\n\n');
 }
 
 // ── Analysis route ────────────────────────────────────────────────────────────
@@ -446,7 +452,7 @@ app.post('/api/analyze', upload.array('images', 100), async (req, res) => {
 
   // Fallback: simple FEN-only PGN
   if (!pgn) {
-    pgn = buildFenPGN(allDiagrams);
+    pgn = await buildFenPGN(allDiagrams);
     pgnSource = 'fen';
   }
 
@@ -485,6 +491,103 @@ async function loadECO() {
 loadECO()
   .then(d => console.log(`✓ ECO openings loaded: ${d.length}`))
   .catch(e => console.warn('ECO preload failed:', e.message));
+
+// ── ECO FEN map (Option A) ────────────────────────────────────────────────────
+
+const normFen = fen => fen.split(' ').slice(0, 4).join(' ');
+
+let ecoFenMap = null;
+
+async function getEcoFenMap() {
+  if (ecoFenMap) return ecoFenMap;
+  const openings = await loadECO();
+  ecoFenMap = new Map();
+  for (const o of openings) {
+    const key = normFen(o.fen);
+    const existing = ecoFenMap.get(key);
+    // Keep most specific (longest) name for each position
+    if (!existing || o.name.length > existing.name.length) {
+      ecoFenMap.set(key, { eco: o.eco, name: o.name });
+    }
+  }
+  return ecoFenMap;
+}
+
+// Build map once after ECO loads
+loadECO().then(() => getEcoFenMap()).catch(() => {});
+
+// ── Hybrid opening lookup: ECO map → Lichess API ─────────────────────────────
+
+async function lookupOpening(fen) {
+  // Option A — instant ECO FEN map
+  const map = await getEcoFenMap();
+  const fromMap = map.get(normFen(fen));
+  if (fromMap) return { ...fromMap, source: 'eco' };
+
+  // Option B — Lichess Masters API (needs LICHESS_TOKEN)
+  if (!process.env.LICHESS_TOKEN) return null;
+  try {
+    await new Promise(r => setTimeout(r, 80));
+    const r = await fetch(
+      `https://explorer.lichess.ovh/masters?fen=${encodeURIComponent(fen)}&moves=0&topGames=0&recentGames=0`,
+      { headers: {
+        'User-Agent': 'ChessTools/1.0 augustin@circlechess.com',
+        'Authorization': `Bearer ${process.env.LICHESS_TOKEN}`,
+      }}
+    );
+    if (!r.ok) return null;
+    const d = await r.json();
+    return d.opening ? { ...d.opening, source: 'lichess' } : null;
+  } catch { return null; }
+}
+
+// ── Opening detect route ──────────────────────────────────────────────────────
+
+app.post('/api/opening/detect', async (req, res) => {
+  try {
+    const { pgn } = req.body;
+    if (!pgn) return res.status(400).json({ error: 'pgn required' });
+
+    const chess = new Chess();
+    try { chess.loadPgn(pgn); } catch { return res.status(400).json({ error: 'Invalid PGN' }); }
+
+    const history = chess.history({ verbose: true });
+    chess.reset();
+
+    let lastOpening = null;
+    let lastIdx = -1;
+    const moves = [];
+    let misses = 0;
+
+    for (let i = 0; i < history.length; i++) {
+      chess.move(history[i]);
+      const fen = chess.fen();
+
+      // Stop calling APIs after 3 consecutive out-of-book moves
+      const opening = misses < 3 ? await lookupOpening(fen) : null;
+
+      if (opening) { lastOpening = opening; lastIdx = i; misses = 0; }
+      else misses++;
+
+      moves.push({
+        n: Math.ceil((i + 1) / 2),
+        color: i % 2 === 0 ? 'w' : 'b',
+        san: history[i].san,
+        fen,
+        opening: opening || null,
+      });
+    }
+
+    res.json({
+      lastOpening,
+      openingEndMove: lastIdx >= 0 ? Math.ceil((lastIdx + 1) / 2) : 0,
+      openingEndColor: lastIdx >= 0 ? (lastIdx % 2 === 0 ? 'w' : 'b') : null,
+      moves,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 app.get('/api/opening/list', async (req, res) => {
   try {
