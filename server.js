@@ -2,7 +2,7 @@ import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import multer from 'multer';
-import sharp from 'sharp';
+import { Jimp } from 'jimp';
 import OpenAI from 'openai';
 import { createClient } from '@libsql/client';
 import { Chess } from 'chess.js';
@@ -22,7 +22,11 @@ const turso = (process.env.TURSO_DATABASE_URL && process.env.TURSO_AUTH_TOKEN)
   : null;
 
 const app = express();
-app.use(cors({ origin: ['http://localhost:5155', 'http://localhost:3001'] }));
+app.use(cors({
+  origin: process.env.VERCEL
+    ? true
+    : ['http://localhost:5155', 'http://localhost:3001']
+}));
 app.use(express.json({ limit: '10mb' }));
 
 // ── Puzzle Generator helpers ──────────────────────────────────────────────────
@@ -188,7 +192,8 @@ function gridCrops(cols, rows, width, height) {
 }
 
 async function extractAllFens(fileBuffer, mediaType) {
-  const { width, height } = await sharp(fileBuffer).metadata();
+  const image = await Jimp.read(fileBuffer);
+  const { width, height } = image.bitmap;
 
   const layouts = [[1,1],[2,1],[1,2],[2,2],[3,1],[1,3],[3,2],[2,3],[3,3]];
 
@@ -206,7 +211,9 @@ async function extractAllFens(fileBuffer, mediaType) {
 
   const results = await Promise.all(
     regions.map(async ({ crop, area }) => {
-      const buf = await sharp(fileBuffer).extract(crop).jpeg({ quality: 92 }).toBuffer();
+      const buf = await image.clone()
+        .crop({ x: crop.left, y: crop.top, w: crop.width, h: crop.height })
+        .getBuffer('image/jpeg');
       const fen = await chessVisionPredict(buf, 'image/jpeg');
       return { fen, top: crop.top, left: crop.left, area };
     })
@@ -446,7 +453,7 @@ app.post('/api/analyze', upload.array('images', 100), async (req, res) => {
   res.json({ diagrams: allDiagrams, fenList, pgn, pgnSource, pageText: textForPGN || null, errors, total: allDiagrams.length });
 });
 
-// ── Static files (production) ─────────────────────────────────────────────────
+// ── Static files (local production preview) ───────────────────────────────────
 
 const distPath = join(__dirname, 'dist');
 if (existsSync(distPath)) {
@@ -454,11 +461,15 @@ if (existsSync(distPath)) {
   app.get('*', (_req, res) => res.sendFile(join(distPath, 'index.html')));
 }
 
-// ── Start ─────────────────────────────────────────────────────────────────────
+// ── Start (local only — Vercel imports app as a module) ───────────────────────
 
-const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => {
-  console.log(`\n✓ PDF-to-PGN server → http://localhost:${PORT}`);
-  console.log('✓ ChessVision.ai — FEN extraction (no key required)');
-  console.log(`✓ GPT-4o — text→PGN ${openai ? 'enabled' : 'disabled (no OPENAI_API_KEY)'}`);
-});
+if (!process.env.VERCEL) {
+  const PORT = process.env.PORT || 3001;
+  app.listen(PORT, () => {
+    console.log(`\n✓ PDF-to-PGN server → http://localhost:${PORT}`);
+    console.log('✓ ChessVision.ai — FEN extraction (no key required)');
+    console.log(`✓ GPT-4o — text→PGN ${openai ? 'enabled' : 'disabled (no OPENAI_API_KEY)'}`);
+  });
+}
+
+export default app;
