@@ -3,6 +3,7 @@ import Sidebar from './components/Sidebar';
 import PdfToPgn from './components/PdfToPgn';
 import PuzzleGenerator from './components/PuzzleGenerator';
 import OpeningExplorer from './components/OpeningExplorer';
+import CurriculumBuilder from './components/CurriculumBuilder';
 
 export default function App() {
   const [page, setPage] = useState('pdf');
@@ -32,7 +33,7 @@ export default function App() {
             Chess Tools
           </span>
           <span className="text-xs ml-1" style={{ color: '#6b5f58' }}>
-            — {page === 'pdf' ? 'PDF to PGN' : page === 'puzzles' ? 'Puzzle Generator' : 'Opening Explorer'}
+            — {{ pdf: 'PDF to PGN', puzzles: 'Puzzle Generator', opening: 'Opening Explorer', curriculum: 'Curriculum Builder' }[page]}
           </span>
         </div>
 
@@ -40,7 +41,8 @@ export default function App() {
         <div className="flex-1 min-h-0 overflow-hidden">
           {page === 'pdf'     && <PdfToPgn />}
           {page === 'puzzles' && <PuzzleGenerator />}
-          {page === 'opening' && <OpeningExplorer />}
+          {page === 'opening'     && <OpeningExplorer />}
+          {page === 'curriculum'  && <CurriculumBuilder />}
         </div>
       </div>
     </div>

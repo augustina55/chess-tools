@@ -21,6 +21,12 @@ const NAV = [
     sub: 'Variations & PGN',
     icon: <span className="text-[20px] leading-none select-none flex-shrink-0">♜</span>,
   },
+  {
+    id: 'curriculum',
+    label: 'Curriculum Builder',
+    sub: 'AI lesson from PDFs',
+    icon: <span className="text-[20px] leading-none select-none flex-shrink-0">🎓</span>,
+  },
 ];
 
 function NavItems({ page, choose }) {

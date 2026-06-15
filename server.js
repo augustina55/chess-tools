@@ -722,6 +722,160 @@ app.get('/api/opening/pgn', async (req, res) => {
   }
 });
 
+// ── Curriculum Builder ────────────────────────────────────────────────────────
+
+const VALID_SQ = /^[a-h][1-8]$/;
+
+function sanitizeArrows(arrows) {
+  if (!Array.isArray(arrows)) return [];
+  return arrows
+    .filter(a => Array.isArray(a) && a.length >= 2 && VALID_SQ.test(a[0]) && VALID_SQ.test(a[1]))
+    .map(a => [a[0], a[1], typeof a[2] === 'string' ? a[2] : 'rgb(0, 171, 84)']);
+}
+
+function sanitizeHighlights(h) {
+  if (!h || typeof h !== 'object' || Array.isArray(h)) return {};
+  const out = {};
+  for (const [sq, color] of Object.entries(h)) {
+    if (VALID_SQ.test(sq) && typeof color === 'string') out[sq] = color;
+  }
+  return out;
+}
+
+async function buildCurriculumGPT(topic, level, numSections, textContent, fens) {
+  const fenBlock = fens.length
+    ? `POSITIONS FROM REFERENCE MATERIAL (FEN):\n${fens.map((f, i) => `${i + 1}. ${f}`).join('\n')}`
+    : 'No specific positions found — use well-known FENs appropriate to the topic.';
+
+  const textBlock = textContent
+    ? `REFERENCE MATERIAL:\n${textContent.slice(0, 6000)}`
+    : 'No reference material provided. Build from general chess knowledge.';
+
+  const userMsg = `TOPIC: ${topic}
+LEVEL: ${level}
+SECTIONS: ${numSections}
+
+${textBlock}
+
+${fenBlock}
+
+Create a complete chess lesson with exactly ${numSections} sections covering distinct aspects of the topic.
+
+ARROW COLORS (use exact strings):
+- "rgb(0, 171, 84)" = green — recommended moves, good squares, active pieces
+- "rgb(220, 38, 38)" = red — threats, weaknesses, moves to avoid
+- "rgb(250, 207, 71)" = yellow — important squares, key ideas
+- "rgb(59, 130, 246)" = blue — alternative plans, secondary ideas
+
+HIGHLIGHT COLORS (use exact strings):
+- "rgba(0, 171, 84, 0.3)" = green — strong squares
+- "rgba(220, 38, 38, 0.3)" = red — weak squares, threats
+- "rgba(250, 207, 71, 0.3)" = yellow — key squares
+- "rgba(59, 130, 246, 0.3)" = blue — alternative plan squares
+
+RULES:
+1. arrows: [[from, to, color]] — from/to must be valid squares (a1–h8)
+2. highlights: {square: rgba_color} — valid squares only
+3. fen: must be a valid chess FEN for the illustrated position
+4. explanation: 3-4 detailed paragraphs
+5. keyPoints: 3-6 bullets (≤8 words each)
+6. questions: 2-3 questions with detailed answers
+
+Output ONLY valid JSON (no markdown fences):
+{
+  "title": "...",
+  "topic": "...",
+  "level": "...",
+  "summary": "...",
+  "sections": [
+    {
+      "id": 1,
+      "heading": "...",
+      "explanation": "...",
+      "keyPoints": ["..."],
+      "fen": "...",
+      "arrows": [["e2","e4","rgb(0, 171, 84)"]],
+      "highlights": {"e4": "rgba(0, 171, 84, 0.3)"},
+      "questions": [{"q": "...", "a": "..."}]
+    }
+  ]
+}`;
+
+  try {
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4o',
+      max_tokens: 4096,
+      temperature: 0.3,
+      messages: [
+        {
+          role: 'system',
+          content: 'You are an expert chess coach. Create structured curriculum lessons in JSON format only — no markdown, no extra text.',
+        },
+        { role: 'user', content: userMsg },
+      ],
+      response_format: { type: 'json_object' },
+    });
+    const data = JSON.parse(completion.choices[0].message.content.trim());
+    data.sections = (data.sections || []).map((s, i) => ({
+      ...s,
+      id: i + 1,
+      arrows: sanitizeArrows(s.arrows),
+      highlights: sanitizeHighlights(s.highlights),
+    }));
+    return data;
+  } catch (err) {
+    console.error('Curriculum GPT error:', err.message);
+    return null;
+  }
+}
+
+app.post('/api/curriculum/build', upload.array('images', 50), async (req, res) => {
+  if (!openai) return res.status(503).json({ error: 'OpenAI API key not configured' });
+  try {
+    const { topic, level = 'intermediate', numSections = '5' } = req.body;
+    if (!topic?.trim()) return res.status(400).json({ error: 'topic required' });
+
+    let combinedText = '';
+    try {
+      const pts = req.body.pageTexts ? JSON.parse(req.body.pageTexts) : [];
+      combinedText = pts.filter(Boolean).join('\n\n');
+    } catch { /* ignore */ }
+
+    const files = req.files || [];
+    const allFens = [];
+
+    if (files.length) {
+      const fenBatches = await Promise.all(
+        files.slice(0, 20).map(async file => {
+          const mt = file.mimetype === 'image/jpg' ? 'image/jpeg' : file.mimetype;
+          try { return await extractAllFens(file.buffer, mt); } catch { return []; }
+        })
+      );
+      fenBatches.forEach(b => allFens.push(...b));
+
+      if (!combinedText) {
+        const ocrResults = await Promise.all(
+          files.slice(0, 5).map(f =>
+            imageToText(f.buffer, f.mimetype === 'image/jpg' ? 'image/jpeg' : f.mimetype)
+          )
+        );
+        combinedText = ocrResults.filter(Boolean).join('\n\n');
+      }
+    }
+
+    const uniqueFens = [...new Set(allFens)].slice(0, 15);
+    const curriculum = await buildCurriculumGPT(
+      topic.trim(), level, parseInt(numSections, 10) || 5, combinedText, uniqueFens
+    );
+
+    if (!curriculum) return res.status(500).json({ error: 'Failed to generate curriculum' });
+    res.json(curriculum);
+  } catch (err) {
+    console.error('Curriculum build error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Static files (local production preview) ───────────────────────────────────
 
 const distPath = join(__dirname, 'dist');
