@@ -27,6 +27,12 @@ const NAV = [
     sub: 'AI lesson from PDFs',
     icon: <span className="text-[20px] leading-none select-none flex-shrink-0">🎓</span>,
   },
+  {
+    id: 'imagegen',
+    label: 'Image Generator',
+    sub: 'Topic + PGN → infographic',
+    icon: <span className="text-[20px] leading-none select-none flex-shrink-0">🖼️</span>,
+  },
 ];
 
 function NavItems({ page, choose }) {

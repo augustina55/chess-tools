@@ -876,6 +876,84 @@ app.post('/api/curriculum/build', upload.array('images', 50), async (req, res) =
   }
 });
 
+// ── Image Generator ───────────────────────────────────────────────────────────
+
+app.post('/api/lesson-image/generate', async (req, res) => {
+  if (!openai) return res.status(503).json({ error: 'OpenAI not configured' });
+  try {
+    const { topic, pgn = '' } = req.body;
+    if (!topic?.trim()) return res.status(400).json({ error: 'topic required' });
+
+    const pgnBlock = pgn.trim()
+      ? `PGN:\n${pgn.trim().slice(0, 3000)}`
+      : 'No PGN provided — create suitable instructive positions.';
+
+    const prompt = `You are an expert chess educator creating a lesson infographic.
+
+TOPIC: ${topic}
+${pgnBlock}
+
+Generate a structured JSON for a chess lesson infographic with 2-3 patterns/chapters.
+
+For each pattern:
+- Extract (or create) a key instructive position as a valid FEN
+- Give it a clear pattern name (e.g. "Battery Mate", "Hook Mate")
+- Write a 1-2 sentence description
+- Add 2-4 arrows: [[from, to, color]] — squares must be valid (a1-h8), color: "green"/"red"/"blue"/"yellow"
+- Add square highlights: {"square": "rgba(r,g,b,a)"} — valid squares only
+- A 2-4 word diagram caption (shown beside the board, e.g. "Powerful Piece Battery!")
+- A 1-2 sentence idea explaining the pattern
+
+Also provide:
+- title: 2-4 UPPERCASE words (e.g. "CHECKMATING PATTERNS")
+- subtitle: catchy phrase ending with ! (e.g. "2 Beautiful Checkmates to Win the Game!")
+- generalIdea: 4-5 short principles, each one sentence
+- bonusTips: 4-5 practical tips, each one sentence
+- tagline: memorable phrase with dots (e.g. "Learn. Plan. Attack. Checkmate!")
+
+Rules: FENs must be valid. Arrow squares must be valid chess squares (a1-h8). Output ONLY valid JSON.
+
+{
+  "title": "CHECKMATING PATTERNS",
+  "subtitle": "2 Beautiful Checkmates to Win the Game!",
+  "patterns": [
+    {
+      "number": 1,
+      "name": "Battery Mate",
+      "description": "Two powerful pieces line up to deliver checkmate.",
+      "fen": "...",
+      "arrows": [["d1","h5","green"],["h5","h7","red"]],
+      "highlights": {"h7": "rgba(220,38,38,0.35)"},
+      "caption": "Powerful Piece Battery!",
+      "idea": "The queen and rook combine attacks on the same file to trap the king."
+    }
+  ],
+  "generalIdea": ["Use checks to attack the king.", "Bring your pieces out quickly."],
+  "bonusTips": ["Look for weak squares around the king.", "Use forcing moves."],
+  "tagline": "Learn. Plan. Attack. Checkmate!"
+}`;
+
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4o',
+      max_tokens: 2048,
+      temperature: 0.35,
+      messages: [{ role: 'user', content: prompt }],
+      response_format: { type: 'json_object' },
+    });
+    const data = JSON.parse(completion.choices[0].message.content.trim());
+    data.patterns = (data.patterns || []).map((p, i) => ({
+      ...p,
+      number: i + 1,
+      arrows: sanitizeArrows(p.arrows || []),
+      highlights: sanitizeHighlights(p.highlights || {}),
+    }));
+    res.json(data);
+  } catch (err) {
+    console.error('Lesson image error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Static files (local production preview) ───────────────────────────────────
 
 const distPath = join(__dirname, 'dist');

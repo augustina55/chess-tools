@@ -4,6 +4,7 @@ import PdfToPgn from './components/PdfToPgn';
 import PuzzleGenerator from './components/PuzzleGenerator';
 import OpeningExplorer from './components/OpeningExplorer';
 import CurriculumBuilder from './components/CurriculumBuilder';
+import ImageGenerator from './components/ImageGenerator';
 
 export default function App() {
   const [page, setPage] = useState('pdf');
@@ -33,7 +34,7 @@ export default function App() {
             Chess Tools
           </span>
           <span className="text-xs ml-1" style={{ color: '#6b5f58' }}>
-            — {{ pdf: 'PDF to PGN', puzzles: 'Puzzle Generator', opening: 'Opening Explorer', curriculum: 'Curriculum Builder' }[page]}
+            — {{ pdf: 'PDF to PGN', puzzles: 'Puzzle Generator', opening: 'Opening Explorer', curriculum: 'Curriculum Builder', imagegen: 'Image Generator' }[page]}
           </span>
         </div>
 
@@ -43,6 +44,7 @@ export default function App() {
           {page === 'puzzles' && <PuzzleGenerator />}
           {page === 'opening'     && <OpeningExplorer />}
           {page === 'curriculum'  && <CurriculumBuilder />}
+          {page === 'imagegen'    && <ImageGenerator />}
         </div>
       </div>
     </div>
