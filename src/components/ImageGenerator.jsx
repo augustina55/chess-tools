@@ -4,12 +4,12 @@ import { Chess } from 'chess.js';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-const CARD_WIDTH = 800;
+const CARD_SIZE = 1500; // square output: 1500 × 1500 px
 
 const PATTERN_COLORS = [
-  { bg: '#2563EB', light: '#EFF6FF', border: '#2563EB' },
-  { bg: '#7C3AED', light: '#F5F3FF', border: '#7C3AED' },
-  { bg: '#059669', light: '#ECFDF5', border: '#059669' },
+  { bg: '#2563EB', light: '#EFF6FF' },
+  { bg: '#7C3AED', light: '#F5F3FF' },
+  { bg: '#059669', light: '#ECFDF5' },
 ];
 
 const TAGLINE_COLORS = ['#1D4ED8', '#16A34A', '#DC2626', '#7C3AED', '#D97706'];
@@ -24,18 +24,16 @@ function isValidFen(fen) {
 // ── Board inside card ─────────────────────────────────────────────────────────
 
 function CardBoard({ fen, arrows, highlights, size }) {
-  const sqStyles = {};
-  for (const [sq, color] of Object.entries(highlights || {})) {
-    sqStyles[sq] = { backgroundColor: color };
-  }
+  const sq = {};
+  for (const [s, c] of Object.entries(highlights || {})) sq[s] = { backgroundColor: c };
   return (
     <Chessboard
       position={isValidFen(fen) ? fen : START_FEN}
       customArrows={arrows || []}
-      customSquareStyles={sqStyles}
+      customSquareStyles={sq}
       arePiecesDraggable={false}
       boardWidth={size}
-      customBoardStyle={{ borderRadius: 4, boxShadow: '0 2px 10px rgba(0,0,0,0.25)' }}
+      customBoardStyle={{ borderRadius: 6, boxShadow: '0 4px 16px rgba(0,0,0,0.25)' }}
       customDarkSquareStyle={{ backgroundColor: '#769656' }}
       customLightSquareStyle={{ backgroundColor: '#eeeed2' }}
     />
@@ -44,67 +42,55 @@ function CardBoard({ fen, arrows, highlights, size }) {
 
 // ── Pattern card ──────────────────────────────────────────────────────────────
 
-function PatternCard({ pattern, col }) {
-  const boardSize = 175;
+function PatternCard({ pattern, col, boardSize }) {
   return (
     <div style={{
       flex: 1,
-      border: `2px solid ${col.border}`,
-      borderRadius: 14,
+      border: `3px solid ${col.bg}`,
+      borderRadius: 18,
       overflow: 'hidden',
       background: '#fff',
       display: 'flex',
       flexDirection: 'column',
     }}>
       {/* Header */}
-      <div style={{
-        background: col.bg,
-        padding: '9px 14px',
-        display: 'flex',
-        alignItems: 'center',
-        gap: 10,
-        flexShrink: 0,
-      }}>
+      <div style={{ background: col.bg, padding: '12px 20px', display: 'flex', alignItems: 'center', gap: 14 }}>
         <div style={{
-          width: 30, height: 30,
+          width: 38, height: 38,
           background: '#fff',
           color: col.bg,
           borderRadius: '50%',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontWeight: 900, fontSize: 16, flexShrink: 0,
+          fontWeight: 900, fontSize: 20, flexShrink: 0,
         }}>
           {pattern.number}
         </div>
-        <span style={{ fontWeight: 900, fontSize: 13, letterSpacing: 1, color: '#fff' }}>
+        <span style={{ fontWeight: 900, fontSize: 18, letterSpacing: 1.5, color: '#fff' }}>
           {pattern.name?.toUpperCase()}
         </span>
-        <span style={{ marginLeft: 'auto', fontSize: 18 }}>🏆</span>
+        <span style={{ marginLeft: 'auto', fontSize: 24 }}>🏆</span>
       </div>
 
       {/* Description */}
-      <div style={{ padding: '10px 14px 8px', fontSize: 12, fontWeight: 700, textAlign: 'center', color: '#1F2937' }}>
+      <div style={{ padding: '14px 20px 10px', fontSize: 15, fontWeight: 700, textAlign: 'center', color: '#1F2937', lineHeight: 1.4 }}>
         {pattern.description}
       </div>
 
-      {/* Board + caption */}
-      <div style={{ display: 'flex', gap: 0, padding: '0 10px 8px', alignItems: 'flex-start' }}>
-        <div style={{ flexShrink: 0 }}>
+      {/* Board + Caption */}
+      <div style={{ display: 'flex', alignItems: 'flex-start', padding: '0 16px 12px', gap: 16 }}>
+        <div>
           <div style={{
-            background: '#3B82F6', color: '#fff', fontSize: 10, fontWeight: 800,
-            padding: '2px 7px', letterSpacing: 1, borderRadius: 3, marginBottom: 4, display: 'inline-block',
+            background: '#3B82F6', color: '#fff', fontSize: 12, fontWeight: 800,
+            padding: '3px 10px', letterSpacing: 1.5, borderRadius: 4, marginBottom: 6, display: 'inline-block',
           }}>POSITION</div>
           <CardBoard fen={pattern.fen} arrows={pattern.arrows} highlights={pattern.highlights} size={boardSize} />
         </div>
-
-        <div style={{ flex: 1, padding: '0 0 0 10px', display: 'flex', flexDirection: 'column' }}>
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', paddingTop: 4 }}>
           <div style={{
-            background: col.bg, color: '#fff', fontSize: 10, fontWeight: 800,
-            padding: '2px 7px', letterSpacing: 1, borderRadius: 3, marginBottom: 10, display: 'inline-block',
+            background: col.bg, color: '#fff', fontSize: 12, fontWeight: 800,
+            padding: '3px 10px', letterSpacing: 1.5, borderRadius: 4, marginBottom: 14, display: 'inline-block',
           }}>EXPLANATION</div>
-          <div style={{
-            fontSize: 15, fontWeight: 900, color: '#1F2937', lineHeight: 1.35,
-            fontFamily: '"Arial Black", Arial, sans-serif',
-          }}>
+          <div style={{ fontSize: 20, fontWeight: 900, color: '#1F2937', lineHeight: 1.3, fontFamily: '"Arial Black", Arial, sans-serif' }}>
             {pattern.caption}
           </div>
         </div>
@@ -112,20 +98,20 @@ function PatternCard({ pattern, col }) {
 
       {/* Idea */}
       <div style={{
-        margin: '0 10px 12px',
+        margin: '0 14px 16px',
         background: col.light,
-        border: `1px solid ${col.border}22`,
-        borderRadius: 8,
-        padding: '8px 10px',
+        border: `1.5px solid ${col.bg}33`,
+        borderRadius: 10,
+        padding: '10px 14px',
         display: 'flex',
         alignItems: 'flex-start',
-        gap: 8,
+        gap: 10,
       }}>
         <span style={{
-          background: '#3B82F6', color: '#fff', fontWeight: 800, fontSize: 11,
-          padding: '2px 6px', borderRadius: 4, flexShrink: 0, whiteSpace: 'nowrap',
+          background: '#3B82F6', color: '#fff', fontWeight: 800, fontSize: 13,
+          padding: '3px 8px', borderRadius: 5, flexShrink: 0, whiteSpace: 'nowrap',
         }}>IDEA:</span>
-        <span style={{ fontSize: 12, color: '#1F2937', lineHeight: 1.5, fontFamily: 'Arial, sans-serif', fontWeight: 600 }}>
+        <span style={{ fontSize: 14, color: '#1F2937', lineHeight: 1.55, fontFamily: 'Arial, sans-serif', fontWeight: 600 }}>
           {pattern.idea}
         </span>
       </div>
@@ -133,98 +119,108 @@ function PatternCard({ pattern, col }) {
   );
 }
 
-// ── The renderable lesson card ────────────────────────────────────────────────
+// ── The 1500×1500 lesson card ─────────────────────────────────────────────────
 
 function LessonCard({ lesson, innerRef }) {
   const { title = 'CHESS LESSON', subtitle = '', patterns = [], generalIdea = [], bonusTips = [], tagline = '' } = lesson;
 
-  // Split title roughly in half for blue/red coloring
-  const words = title.trim().split(/\s+/);
-  const half = Math.ceil(words.length / 2);
-  const blueWords = words.slice(0, half).join(' ');
-  const redWords = words.slice(half).join(' ');
+  const words  = title.trim().split(/\s+/);
+  const half   = Math.ceil(words.length / 2);
+  const blue   = words.slice(0, half).join(' ');
+  const red    = words.slice(half).join(' ');
+  const tags   = tagline.split(/\.\s*/).filter(Boolean);
 
-  // Tagline parts split by '. '
-  const tagParts = tagline.split(/\.\s*/).filter(Boolean);
+  // Board size: each pattern card is roughly (1500 - 60 padding - gaps) / numPatterns wide
+  // At 2 patterns: ~700px per card → board ~310px; at 3 patterns: ~460px → board ~210px
+  const n         = patterns.length || 2;
+  const cardInner = CARD_SIZE - 60; // 30px padding each side
+  const perCard   = (cardInner - (n - 1) * 14) / n;
+  const boardSize = Math.round(Math.min(perCard * 0.46, 320));
 
   return (
-    <div ref={innerRef} style={{
-      width: CARD_WIDTH,
-      background: '#FFFFFF',
-      fontFamily: '"Arial Black", Arial, sans-serif',
-      padding: '20px 22px 18px',
-      boxSizing: 'border-box',
-      boxShadow: '0 8px 40px rgba(0,0,0,0.15)',
-    }}>
-
+    <div
+      ref={innerRef}
+      style={{
+        width: CARD_SIZE,
+        height: CARD_SIZE,
+        background: '#FFFFFF',
+        fontFamily: '"Arial Black", Arial, sans-serif',
+        padding: '30px 30px',
+        boxSizing: 'border-box',
+        display: 'flex',
+        flexDirection: 'column',
+        overflow: 'hidden',
+      }}
+    >
       {/* ── Logos ── */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <div style={{
-            width: 34, height: 34,
+            width: 48, height: 48,
             background: 'linear-gradient(135deg,#FACF47,#E17846)',
-            borderRadius: 8,
+            borderRadius: 12,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 20, boxShadow: '0 2px 8px rgba(250,207,71,0.4)',
+            fontSize: 28, boxShadow: '0 3px 10px rgba(250,207,71,0.4)',
           }}>♟</div>
           <div style={{ lineHeight: 1.2 }}>
-            <span style={{ fontWeight: 900, fontSize: 15, color: '#1C1917' }}>Circle</span>
-            <span style={{ fontWeight: 900, fontSize: 15, color: '#E17846' }}>Chess</span>
-            <div style={{ fontSize: 9, color: '#9a8070', fontWeight: 600, letterSpacing: 1 }}>CHESS TOOLS</div>
+            <span style={{ fontWeight: 900, fontSize: 22, color: '#1C1917' }}>Circle</span>
+            <span style={{ fontWeight: 900, fontSize: 22, color: '#E17846' }}>Chess</span>
+            <div style={{ fontSize: 11, color: '#9a8070', fontWeight: 600, letterSpacing: 2 }}>CHESS TOOLS</div>
           </div>
         </div>
         <div style={{ textAlign: 'right', fontFamily: 'Arial, sans-serif' }}>
-          <div style={{ fontSize: 12, fontWeight: 800, color: '#4B5563' }}>Caissa</div>
-          <div style={{ fontSize: 12, fontWeight: 800, color: '#4B5563' }}>School of Chess</div>
+          <div style={{ fontSize: 16, fontWeight: 800, color: '#4B5563' }}>Caissa</div>
+          <div style={{ fontSize: 16, fontWeight: 800, color: '#4B5563' }}>School of Chess</div>
         </div>
       </div>
 
       {/* ── Title ── */}
-      <div style={{ textAlign: 'center', marginBottom: 12 }}>
-        <div style={{ fontSize: 38, fontWeight: 900, lineHeight: 1.1, letterSpacing: 1, marginBottom: 10 }}>
-          <span style={{ color: '#1D4ED8' }}>{blueWords} </span>
-          {redWords && <span style={{ color: '#DC2626' }}>{redWords}</span>}
+      <div style={{ textAlign: 'center', marginBottom: 18 }}>
+        <div style={{ fontSize: 62, fontWeight: 900, lineHeight: 1.05, letterSpacing: 2, marginBottom: 14 }}>
+          <span style={{ color: '#1D4ED8' }}>{blue} </span>
+          {red && <span style={{ color: '#DC2626' }}>{red}</span>}
         </div>
         <div style={{
           background: 'linear-gradient(135deg,#16A34A,#059669)',
           color: '#fff',
           fontWeight: 900,
-          fontSize: 13,
-          padding: '8px 24px',
-          borderRadius: 8,
+          fontSize: 18,
+          padding: '10px 32px',
+          borderRadius: 10,
           display: 'inline-block',
-          letterSpacing: 1,
-          boxShadow: '0 4px 12px rgba(22,163,74,0.35)',
+          letterSpacing: 1.5,
+          boxShadow: '0 6px 18px rgba(22,163,74,0.35)',
         }}>
           🏆 {subtitle.toUpperCase()} 🏆
         </div>
       </div>
 
       {/* ── Pattern cards ── */}
-      <div style={{ display: 'flex', gap: 12, marginBottom: 12 }}>
+      <div style={{ display: 'flex', gap: 14, marginBottom: 16, flex: '0 0 auto' }}>
         {patterns.map((p, i) => (
-          <PatternCard key={i} pattern={p} col={PATTERN_COLORS[i % PATTERN_COLORS.length]} />
+          <PatternCard key={i} pattern={p} col={PATTERN_COLORS[i % PATTERN_COLORS.length]} boardSize={boardSize} />
         ))}
       </div>
 
       {/* ── General Idea + Bonus Tips ── */}
-      <div style={{ display: 'flex', gap: 12, marginBottom: 12 }}>
+      <div style={{ display: 'flex', gap: 14, marginBottom: 16, flex: '1 1 auto', minHeight: 0 }}>
         {/* General Idea */}
         <div style={{
           flex: 1,
           background: '#F0FDF4',
-          border: '2px solid #16A34A',
-          borderRadius: 12,
-          padding: '12px 14px',
+          border: '2.5px solid #16A34A',
+          borderRadius: 16,
+          padding: '16px 18px',
+          overflow: 'hidden',
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-            <span style={{ fontSize: 20 }}>💡</span>
-            <span style={{ fontWeight: 900, color: '#15803D', fontSize: 13, letterSpacing: 1 }}>GENERAL IDEA</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+            <span style={{ fontSize: 26 }}>💡</span>
+            <span style={{ fontWeight: 900, color: '#15803D', fontSize: 17, letterSpacing: 1.5 }}>GENERAL IDEA</span>
           </div>
-          {generalIdea.map((item, i) => (
-            <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 7, alignItems: 'flex-start' }}>
-              <span style={{ fontSize: 13, flexShrink: 0 }}>🎯</span>
-              <span style={{ fontSize: 12, color: '#1F2937', fontFamily: 'Arial, sans-serif', fontWeight: 600, lineHeight: 1.4 }}>{item}</span>
+          {generalIdea.slice(0, 5).map((item, i) => (
+            <div key={i} style={{ display: 'flex', gap: 10, marginBottom: 10, alignItems: 'flex-start' }}>
+              <span style={{ fontSize: 16, flexShrink: 0 }}>🎯</span>
+              <span style={{ fontSize: 14, color: '#1F2937', fontFamily: 'Arial, sans-serif', fontWeight: 600, lineHeight: 1.45 }}>{item}</span>
             </div>
           ))}
         </div>
@@ -233,18 +229,19 @@ function LessonCard({ lesson, innerRef }) {
         <div style={{
           flex: 1,
           background: '#FFF0F9',
-          border: '2px solid #DB2777',
-          borderRadius: 12,
-          padding: '12px 14px',
+          border: '2.5px solid #DB2777',
+          borderRadius: 16,
+          padding: '16px 18px',
+          overflow: 'hidden',
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-            <span style={{ fontSize: 20 }}>⭐</span>
-            <span style={{ fontWeight: 900, color: '#BE185D', fontSize: 13, letterSpacing: 1 }}>BONUS TIPS</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+            <span style={{ fontSize: 26 }}>⭐</span>
+            <span style={{ fontWeight: 900, color: '#BE185D', fontSize: 17, letterSpacing: 1.5 }}>BONUS TIPS</span>
           </div>
-          {bonusTips.map((tip, i) => (
-            <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 7, alignItems: 'flex-start' }}>
-              <span style={{ fontSize: 13, color: '#16A34A', flexShrink: 0 }}>✅</span>
-              <span style={{ fontSize: 12, color: '#1F2937', fontFamily: 'Arial, sans-serif', fontWeight: 600, lineHeight: 1.4 }}>{tip}</span>
+          {bonusTips.slice(0, 5).map((tip, i) => (
+            <div key={i} style={{ display: 'flex', gap: 10, marginBottom: 10, alignItems: 'flex-start' }}>
+              <span style={{ fontSize: 16, color: '#16A34A', flexShrink: 0 }}>✅</span>
+              <span style={{ fontSize: 14, color: '#1F2937', fontFamily: 'Arial, sans-serif', fontWeight: 600, lineHeight: 1.45 }}>{tip}</span>
             </div>
           ))}
         </div>
@@ -253,18 +250,19 @@ function LessonCard({ lesson, innerRef }) {
       {/* ── Remember banner ── */}
       <div style={{
         background: 'linear-gradient(135deg,#1E3A8A,#3B82F6)',
-        borderRadius: 10,
-        padding: '10px 18px',
-        marginBottom: 12,
+        borderRadius: 14,
+        padding: '14px 22px',
+        marginBottom: 14,
         display: 'flex',
         alignItems: 'center',
-        gap: 12,
+        gap: 16,
         color: '#fff',
+        flexShrink: 0,
       }}>
-        <span style={{ fontSize: 22 }}>🛡️</span>
+        <span style={{ fontSize: 28 }}>🛡️</span>
         <div>
-          <div style={{ fontWeight: 900, fontSize: 12, letterSpacing: 1, marginBottom: 3 }}>REMEMBER</div>
-          <div style={{ fontFamily: 'Arial, sans-serif', fontSize: 12, fontWeight: 600, display: 'flex', gap: 16 }}>
+          <div style={{ fontWeight: 900, fontSize: 14, letterSpacing: 2, marginBottom: 6 }}>REMEMBER</div>
+          <div style={{ fontFamily: 'Arial, sans-serif', fontSize: 14, fontWeight: 600, display: 'flex', gap: 20, flexWrap: 'wrap' }}>
             {['Learn the patterns.', 'Understand the ideas.', 'Use them in your games!'].map((t, i) => (
               <span key={i}>✅ {t}</span>
             ))}
@@ -276,17 +274,18 @@ function LessonCard({ lesson, innerRef }) {
       <div style={{
         textAlign: 'center',
         background: '#FFFBEB',
-        borderRadius: 10,
-        padding: '12px 16px',
-        border: '1px solid #FDE68A',
+        borderRadius: 14,
+        padding: '16px',
+        border: '2px solid #FDE68A',
+        flexShrink: 0,
       }}>
-        <span style={{ fontSize: 22, marginRight: 8 }}>👑</span>
-        {tagParts.map((part, i) => (
-          <span key={i} style={{ fontWeight: 900, fontSize: 18, color: TAGLINE_COLORS[i % TAGLINE_COLORS.length] }}>
-            {part}{i < tagParts.length - 1 ? '. ' : ''}
+        <span style={{ fontSize: 30, marginRight: 10 }}>👑</span>
+        {tags.map((part, i) => (
+          <span key={i} style={{ fontWeight: 900, fontSize: 24, color: TAGLINE_COLORS[i % TAGLINE_COLORS.length] }}>
+            {part}{i < tags.length - 1 ? '. ' : ''}
           </span>
         ))}
-        <span style={{ fontSize: 22, marginLeft: 8 }}>♚</span>
+        <span style={{ fontSize: 30, marginLeft: 10 }}>♚</span>
       </div>
     </div>
   );
@@ -302,7 +301,7 @@ export default function ImageGenerator() {
   const [errMsg, setErrMsg] = useState('');
   const cardRef = useRef(null);
 
-  const isLoading  = status === 'loading';
+  const isLoading   = status === 'loading';
   const canGenerate = topic.trim().length > 0 && !isLoading;
 
   const generate = async () => {
@@ -317,8 +316,7 @@ export default function ImageGenerator() {
         body: JSON.stringify({ topic: topic.trim(), pgn }),
       });
       if (!r.ok) { const e = await r.json(); throw new Error(e.error || `Error ${r.status}`); }
-      const data = await r.json();
-      setLesson(data);
+      setLesson(await r.json());
       setStatus('done');
     } catch (err) {
       setErrMsg(err.message);
@@ -332,9 +330,11 @@ export default function ImageGenerator() {
     try {
       const { toPng } = await import('html-to-image');
       const dataUrl = await toPng(el, {
-        pixelRatio: 2,
+        pixelRatio: 1,          // 1× = exactly 1500×1500 px
         backgroundColor: '#ffffff',
         cacheBust: true,
+        width: CARD_SIZE,
+        height: CARD_SIZE,
       });
       const a = document.createElement('a');
       a.download = `${lesson.title?.replace(/\s+/g, '_') || 'chess_lesson'}.png`;
@@ -345,22 +345,24 @@ export default function ImageGenerator() {
     }
   };
 
+  // Scale factor so card fits in the preview area (card is 1500px, preview ≈ 700-900px wide)
+  const PREVIEW_SCALE = 0.52;
+
   return (
     <div className="flex h-full overflow-hidden">
 
-      {/* ── Left panel ──────────────────────────────────────────────── */}
+      {/* ── Left panel ─────────────────────────────────────────── */}
       <aside
         className="w-64 flex-shrink-0 flex flex-col overflow-y-auto"
         style={{ borderRight: '1px solid #DDD5C8', background: '#FAF8F4' }}
       >
-        <div className="px-4 py-5 space-y-5 flex-1">
+        <div className="px-4 py-5 space-y-5 flex-1 flex flex-col">
 
           <div>
             <h2 className="text-sm font-bold" style={{ color: '#1C1917' }}>Image Generator</h2>
-            <p className="text-[11px] mt-0.5" style={{ color: '#6b5f58' }}>Topic + PGN → chess infographic</p>
+            <p className="text-[11px] mt-0.5" style={{ color: '#6b5f58' }}>Topic + PGN → 1500×1500 infographic</p>
           </div>
 
-          {/* Topic */}
           <div>
             <p className="text-[11px] font-bold uppercase tracking-widest mb-1.5" style={{ color: '#9a8070' }}>Topic</p>
             <input
@@ -374,7 +376,6 @@ export default function ImageGenerator() {
             />
           </div>
 
-          {/* PGN */}
           <div>
             <p className="text-[11px] font-bold uppercase tracking-widest mb-1.5" style={{ color: '#9a8070' }}>
               PGN <span style={{ textTransform: 'none', fontWeight: 500, fontSize: 10 }}>(optional)</span>
@@ -382,14 +383,13 @@ export default function ImageGenerator() {
             <textarea
               value={pgn}
               onChange={e => setPgn(e.target.value)}
-              placeholder="Paste PGN here for position-specific content…"
+              placeholder="Paste PGN for position-specific content…"
               rows={8}
               className="w-full px-3 py-2 text-xs rounded-lg outline-none resize-y"
               style={{ border: '1px solid #DDD5C8', background: '#fff', color: '#1C1917', fontFamily: 'monospace' }}
             />
           </div>
 
-          {/* Generate */}
           <button
             onClick={generate}
             disabled={!canGenerate}
@@ -400,72 +400,49 @@ export default function ImageGenerator() {
               border: 'none',
               cursor: canGenerate ? 'pointer' : 'not-allowed',
               boxShadow: canGenerate ? '0 4px 14px rgba(250,207,71,0.3)' : 'none',
-              transition: 'all 0.2s',
             }}
           >
             {isLoading ? 'Generating…' : 'Generate Image'}
           </button>
 
-          {/* Error */}
           {status === 'error' && (
             <div className="text-xs px-3 py-2 rounded-lg" style={{ background: 'rgba(220,38,38,0.08)', color: '#DC2626' }}>
               {errMsg}
             </div>
           )}
 
-          {/* Download */}
           {lesson && (
             <button
               onClick={download}
               className="w-full py-2.5 text-sm font-bold rounded-xl"
-              style={{
-                border: '2px solid #FACF47',
-                background: 'transparent',
-                color: '#D1AB41',
-                cursor: 'pointer',
-                transition: 'all 0.2s',
-              }}
+              style={{ border: '2px solid #FACF47', background: 'transparent', color: '#D1AB41', cursor: 'pointer' }}
             >
-              ⬇ Download PNG
+              ⬇ Download 1500×1500 PNG
             </button>
           )}
 
-          {/* Tips */}
-          <div className="mt-auto rounded-xl p-3 text-[11px] space-y-1.5"
-            style={{ background: 'rgba(250,207,71,0.07)', color: '#78655A' }}>
-            <p className="font-bold mb-1">Tips</p>
-            <p>• Paste PGN for position-specific content</p>
-            <p>• Topic name becomes the infographic title</p>
-            <p>• Download exports at 2× resolution (1600px)</p>
-            <p>• Works great for social media posts</p>
+          <div className="mt-auto rounded-xl p-3 text-[11px] space-y-1.5" style={{ background: 'rgba(250,207,71,0.07)', color: '#78655A' }}>
+            <p className="font-bold mb-1">Output</p>
+            <p>• Fixed 1500 × 1500 px square</p>
+            <p>• Perfect for Instagram posts</p>
+            <p>• Paste PGN for real positions</p>
           </div>
         </div>
       </aside>
 
-      {/* ── Center: preview ──────────────────────────────────────────── */}
+      {/* ── Center: preview ─────────────────────────────────────── */}
       <main className="flex-1 overflow-auto" style={{ background: '#E5E2DC' }}>
 
-        {/* Empty state */}
         {!lesson && !isLoading && (
           <div className="flex flex-col items-center justify-center h-full text-center p-8">
             <div className="text-5xl mb-4">🖼️</div>
             <h3 className="text-lg font-bold mb-2" style={{ color: '#1C1917' }}>Chess Lesson Image Generator</h3>
             <p className="text-sm max-w-xs" style={{ color: '#6b5f58' }}>
-              Enter a chess topic (and optional PGN) — GPT-4o generates a beautiful teaching
-              infographic with positions, patterns, and tips, ready to download as PNG.
+              Enter a topic + optional PGN → GPT-4o generates a 1500×1500 chess infographic ready for Instagram.
             </p>
-            <div className="mt-6 flex gap-3">
-              {['Enter Topic', 'Add PGN', 'Download PNG'].map((s, i) => (
-                <div key={s} className="rounded-xl px-4 py-3 text-center" style={{ background: 'rgba(250,207,71,0.12)' }}>
-                  <div className="text-lg font-bold mb-1" style={{ color: '#FACF47' }}>{i + 1}</div>
-                  <div className="text-[11px] font-semibold" style={{ color: '#78655A' }}>{s}</div>
-                </div>
-              ))}
-            </div>
           </div>
         )}
 
-        {/* Loading */}
         {isLoading && (
           <div className="flex flex-col items-center justify-center h-full">
             <div className="w-10 h-10 border-4 rounded-full animate-spin mb-4"
@@ -474,38 +451,44 @@ export default function ImageGenerator() {
           </div>
         )}
 
-        {/* Card preview */}
         {lesson && (
           <div className="flex flex-col items-center py-6 px-4 gap-4">
-            {/* Top toolbar */}
+            {/* Toolbar */}
             <div className="flex gap-3 self-end mr-2">
-              <button
-                onClick={download}
+              <button onClick={download}
                 className="text-sm font-bold px-5 py-2 rounded-xl"
-                style={{
-                  background: 'linear-gradient(135deg,#FACF47,#E17846)',
-                  color: '#1C1917',
-                  border: 'none',
-                  cursor: 'pointer',
-                  boxShadow: '0 4px 14px rgba(250,207,71,0.35)',
-                }}
-              >
-                ⬇ Download PNG
+                style={{ background: 'linear-gradient(135deg,#FACF47,#E17846)', color: '#1C1917', border: 'none', cursor: 'pointer', boxShadow: '0 4px 14px rgba(250,207,71,0.35)' }}>
+                ⬇ Download PNG (1500×1500)
               </button>
-              <button
-                onClick={generate}
+              <button onClick={generate}
                 className="text-sm font-semibold px-5 py-2 rounded-xl"
-                style={{ background: '#fff', color: '#78655A', border: '1px solid #DDD5C8', cursor: 'pointer' }}
-              >
+                style={{ background: '#fff', color: '#78655A', border: '1px solid #DDD5C8', cursor: 'pointer' }}>
                 ↻ Regenerate
               </button>
             </div>
 
-            {/* The card */}
-            <LessonCard lesson={lesson} innerRef={cardRef} />
+            {/* Scaled preview — card is 1500px, scaled to fit screen */}
+            <div style={{
+              width: CARD_SIZE * PREVIEW_SCALE,
+              height: CARD_SIZE * PREVIEW_SCALE,
+              flexShrink: 0,
+              position: 'relative',
+              overflow: 'hidden',
+              borderRadius: 8,
+              boxShadow: '0 8px 40px rgba(0,0,0,0.2)',
+            }}>
+              <div style={{
+                position: 'absolute',
+                top: 0, left: 0,
+                transform: `scale(${PREVIEW_SCALE})`,
+                transformOrigin: 'top left',
+              }}>
+                <LessonCard lesson={lesson} innerRef={cardRef} />
+              </div>
+            </div>
 
             <p className="text-xs" style={{ color: '#9a8070' }}>
-              Click "Download PNG" to save at 1600×2× resolution
+              Preview scaled to {Math.round(PREVIEW_SCALE * 100)}% — download exports exactly 1500×1500 px
             </p>
           </div>
         )}
