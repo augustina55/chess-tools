@@ -66,36 +66,47 @@ function convertMovesToSAN(fen, movesStr) {
 
 // ── Puzzle filter cache ───────────────────────────────────────────────────────
 
-let filtersCache = null;
+// Lichess puzzle themes are fixed — hardcoded to avoid slow SELECT DISTINCT on 1M rows
+const LICHESS_THEMES = [
+  'advancedPawn','advantage','anastasiaMate','arabianMate','attackingF2F7','attraction',
+  'backRankMate','bishopEndgame','bodenMate','castling','capturingDefender','crushing',
+  'defensiveMove','deflection','discoveredAttack','doubleBishopMate','doubleCheck',
+  'dovetailMate','endgame','enPassant','equality','exposedKing','fork','hangingPiece',
+  'hookMate','interference','intermezzo','kingsideAttack','knightEndgame','long',
+  'master','masterVsMaster','mate','mateIn1','mateIn2','mateIn3','mateIn4','mateIn5',
+  'middlegame','opening','pawnEndgame','pin','promotion','queenEndgame','queenRookEndgame',
+  'queensideAttack','quietMove','rookEndgame','sacrifice','short','simplification',
+  'skewer','smotheredMate','superGM','trappedPiece','underPromotion','veryLong',
+  'xRayAttack','zugzwang',
+].sort();
 
-async function buildFiltersCache() {
-  if (!turso) return;
-  const [themesRes, openingsRes] = await Promise.all([
-    turso.execute({ sql: `SELECT DISTINCT Themes FROM puzzles WHERE Themes != ''`, args: [] }),
-    turso.execute({ sql: `SELECT DISTINCT OpeningTags FROM puzzles WHERE OpeningTags != '' ORDER BY OpeningTags`, args: [] }),
-  ]);
-  const themeSet = new Set();
-  themesRes.rows.forEach(r => String(r.Themes).split(' ').forEach(t => t && themeSet.add(t)));
-  filtersCache = {
-    themes:   [...themeSet].sort(),
-    openings: openingsRes.rows.map(r => r.OpeningTags),
-  };
+let openingsCache = null;
+
+async function loadOpeningsCache() {
+  if (openingsCache || !turso) return;
+  try {
+    const r = await turso.execute({
+      sql: `SELECT DISTINCT OpeningTags FROM puzzles WHERE OpeningTags != '' ORDER BY OpeningTags LIMIT 2000`,
+      args: [],
+    });
+    openingsCache = r.rows.map(row => row.OpeningTags);
+    console.log(`✓ Puzzle openings cache ready (${openingsCache.length})`);
+  } catch (e) {
+    console.error('Openings cache failed:', e.message);
+    openingsCache = [];
+  }
 }
 
-if (turso) {
-  buildFiltersCache()
-    .then(() => console.log(`✓ Puzzle filter cache ready (${filtersCache.themes.length} themes, ${filtersCache.openings.length} openings)`))
-    .catch(e  => console.error('Puzzle cache warm failed:', e.message));
-}
+if (turso) loadOpeningsCache();
 
 // ── Puzzle routes ─────────────────────────────────────────────────────────────
 
 app.get('/api/puzzle/filters', async (req, res) => {
   if (!turso) return res.status(503).json({ error: 'Turso DB not configured' });
   try {
-    if (!filtersCache) await buildFiltersCache();
+    if (!openingsCache) await loadOpeningsCache();
     res.set('Cache-Control', 'public, s-maxage=86400, stale-while-revalidate=3600');
-    res.json(filtersCache);
+    res.json({ themes: LICHESS_THEMES, openings: openingsCache || [] });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -119,10 +130,10 @@ app.get('/api/puzzle/pgn', async (req, res) => {
     const wantedCount = Math.min(+count, 500);
     const whereClause = where.length ? 'WHERE ' + where.join(' AND ') : '';
 
-    // Single query — ORDER BY RANDOM() on the filtered set (fast when filters reduce the 1M table)
+    // Cap the random pool at 3000 rows so ORDER BY RANDOM() is fast on any filter size
     args.push(wantedCount);
     const result = await turso.execute({
-      sql: `SELECT * FROM puzzles ${whereClause} ORDER BY RANDOM() LIMIT ?`,
+      sql: `SELECT * FROM (SELECT * FROM puzzles ${whereClause} LIMIT 3000) ORDER BY RANDOM() LIMIT ?`,
       args,
     });
 
