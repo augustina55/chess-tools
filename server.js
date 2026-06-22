@@ -13,8 +13,8 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-const openai = process.env.OPENAI_API_KEY
-  ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+const openai = process.env.GROQ_API_KEY
+  ? new OpenAI({ apiKey: process.env.GROQ_API_KEY, baseURL: 'https://api.groq.com/openai/v1' })
   : null;
 
 const turso = (process.env.TURSO_DATABASE_URL && process.env.TURSO_AUTH_TOKEN)
@@ -233,44 +233,8 @@ async function extractAllFens(fileBuffer, mediaType) {
 // ── GPT-4o Vision OCR (for images / scanned pages) ───────────────────────────
 
 async function imageToText(buffer, mediaType) {
-  if (!openai) return null;
-  const base64 = buffer.toString('base64');
-  try {
-    const res = await openai.chat.completions.create({
-      model: 'gpt-4o',
-      max_tokens: 1024,
-      messages: [{
-        role: 'user',
-        content: [
-          {
-            type: 'image_url',
-            image_url: { url: `data:${mediaType};base64,${base64}`, detail: 'high' }
-          },
-          {
-            type: 'text',
-            text: `Extract all the TEXT visible on this chess book page.
-
-Include:
-- Player names and scores (e.g. "Kasparov – Karpov", "A. Smith vs B. Jones")
-- Tournament name, location, year (e.g. "Olginka 2011", "World Championship")
-- Chapter or section title (e.g. "Candidate Moves", "Tactics")
-- Side-to-move hint (e.g. "Black to play", "White to move")
-- Chess move sequences in algebraic notation (e.g. "1.e4 e5 2.Nf3 Nc6")
-- Annotation symbols attached to moves (!, ?, !?, ?!, !!, ??)
-- Variation moves in parentheses
-- All commentary, explanations, analysis, and narrative text
-
-Do NOT describe or transcribe the chess board/diagram itself.
-Return only the raw text exactly as it appears on the page, preserving line breaks.`
-          }
-        ]
-      }]
-    });
-    return res.choices[0].message.content.trim();
-  } catch (err) {
-    console.error('GPT-4o vision OCR error:', err.message);
-    return null;
-  }
+  // Groq does not support vision/image input — OCR unavailable
+  return null;
 }
 
 // ── Text → PGN via GPT-4o ────────────────────────────────────────────────────
@@ -328,7 +292,7 @@ Output ONLY raw PGN. No markdown, no explanation, no code fences.`;
 
   try {
     const completion = await openai.chat.completions.create({
-      model: 'gpt-4o',
+      model: 'llama-3.3-70b-versatile',
       max_tokens: 2048,
       temperature: 0.1,
       messages: [{ role: 'user', content: prompt }]
@@ -800,7 +764,7 @@ Output ONLY valid JSON (no markdown fences):
 
   try {
     const completion = await openai.chat.completions.create({
-      model: 'gpt-4o',
+      model: 'llama-3.3-70b-versatile',
       max_tokens: 4096,
       temperature: 0.3,
       messages: [
@@ -827,7 +791,7 @@ Output ONLY valid JSON (no markdown fences):
 }
 
 app.post('/api/curriculum/build', upload.array('images', 50), async (req, res) => {
-  if (!openai) return res.status(503).json({ error: 'OpenAI API key not configured' });
+  if (!openai) return res.status(503).json({ error: 'Groq API key not configured' });
   try {
     const { topic, level = 'intermediate', numSections = '5' } = req.body;
     if (!topic?.trim()) return res.status(400).json({ error: 'topic required' });
@@ -908,7 +872,7 @@ function buildStudyPGN(data) {
       `[Date "${date}"]`,
       `[White "?"][Black "?"][Result "*"]`,
       `[FEN "${pos.fen}"][SetUp "1"]`,
-      `[Annotator "GPT-4o / CircleChess"]`,
+      `[Annotator "Groq / CircleChess"]`,
     ].join('\n');
 
     const body = pos.explanation
@@ -933,7 +897,7 @@ function buildStudyPGN(data) {
 }
 
 app.post('/api/study/generate', upload.array('images', 50), async (req, res) => {
-  if (!openai) return res.status(503).json({ error: 'OpenAI not configured' });
+  if (!openai) return res.status(503).json({ error: 'Groq API key not configured' });
   try {
     const { topic } = req.body;
     if (!topic?.trim()) return res.status(400).json({ error: 'topic required' });
@@ -1025,7 +989,7 @@ Output ONLY valid JSON:
 }`;
 
     const completion = await openai.chat.completions.create({
-      model: 'gpt-4o',
+      model: 'llama-3.3-70b-versatile',
       max_tokens: 4096,
       temperature: 0.2,
       messages: [{ role: 'user', content: prompt }],
@@ -1044,7 +1008,7 @@ Output ONLY valid JSON:
 // ── Image Generator ───────────────────────────────────────────────────────────
 
 app.post('/api/lesson-image/generate', async (req, res) => {
-  if (!openai) return res.status(503).json({ error: 'OpenAI not configured' });
+  if (!openai) return res.status(503).json({ error: 'Groq API key not configured' });
   try {
     const { topic, pgn = '' } = req.body;
     if (!topic?.trim()) return res.status(400).json({ error: 'topic required' });
@@ -1099,7 +1063,7 @@ Rules: FENs must be valid. Arrow squares must be valid chess squares (a1-h8). Ou
 }`;
 
     const completion = await openai.chat.completions.create({
-      model: 'gpt-4o',
+      model: 'llama-3.3-70b-versatile',
       max_tokens: 2048,
       temperature: 0.35,
       messages: [{ role: 'user', content: prompt }],
@@ -1134,7 +1098,7 @@ if (!process.env.VERCEL) {
   app.listen(PORT, () => {
     console.log(`\n✓ PDF-to-PGN server → http://localhost:${PORT}`);
     console.log('✓ ChessVision.ai — FEN extraction (no key required)');
-    console.log(`✓ GPT-4o — text→PGN ${openai ? 'enabled' : 'disabled (no OPENAI_API_KEY)'}`);
+    console.log(`✓ Groq llama-3.3-70b — AI features ${openai ? 'enabled' : 'disabled (no GROQ_API_KEY)'}`);
   });
 }
 
