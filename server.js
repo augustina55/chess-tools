@@ -117,30 +117,27 @@ app.get('/api/puzzle/pgn', async (req, res) => {
     args.push(+minRating, +maxRating);
 
     const wantedCount = Math.min(+count, 500);
+    const whereClause = where.length ? 'WHERE ' + where.join(' AND ') : '';
 
-    // Fast random: count first, then pick a random OFFSET — avoids ORDER BY RANDOM() on 1M rows
-    const filterArgs = [...args];
-    const countResult = await turso.execute({
-      sql: `SELECT COUNT(*) as n FROM puzzles ${where.length ? 'WHERE ' + where.join(' AND ') : ''}`,
-      args: filterArgs,
+    // Single query — ORDER BY RANDOM() on the filtered set (fast when filters reduce the 1M table)
+    args.push(wantedCount);
+    const result = await turso.execute({
+      sql: `SELECT * FROM puzzles ${whereClause} ORDER BY RANDOM() LIMIT ?`,
+      args,
     });
-    const total = Number(countResult.rows[0]?.n ?? 0);
-    const offset = total > wantedCount ? Math.floor(Math.random() * (total - wantedCount)) : 0;
 
-    const sql = `SELECT * FROM puzzles ${where.length ? 'WHERE ' + where.join(' AND ') : ''} LIMIT ? OFFSET ?`;
-    args.push(wantedCount, offset);
-
-    const result = await turso.execute({ sql, args });
-    let pgn = '';
+    const pgns = [];
     result.rows.forEach((row, i) => {
       const mainTheme = row.Themes?.split(' ')[0] || 'Puzzle';
       const { fen: fixedFen, remainingMoves } = applyFirstMoveAndFixFen(row.FEN, row.Moves);
       if (!remainingMoves) return;
       const sanMoves = convertMovesToSAN(fixedFen, remainingMoves);
       const side = fixedFen.split(' ')[1] === 'w' ? '{White to play}' : '{Black to play}';
-      pgn += `[Event "Puzzle ${i+1}"]\n[Date "????.??.??"]\n[White "Easy Exercises"]\n[Black "Exercise ${i+1}"]\n[Result "*"]\n[Variant "Standard"]\n[puzzleId "${row.PuzzleId}"]\n[Opening "${row.OpeningTags||'?'}"]\n[StudyName "Custom PGN"]\n[ChapterName "${mainTheme} Exercise ${i+1}"]\n[ChapterURL "${row.GameUrl||''}"]\n[Annotator "CircleChess"]\n[FEN "${fixedFen}"]\n\n${side}\n${sanMoves}\n\n`;
+      pgns.push(
+        `[Event "Puzzle ${i+1}"]\n[Date "????.??.??"]\n[White "Easy Exercises"]\n[Black "Exercise ${i+1}"]\n[Result "*"]\n[Variant "Standard"]\n[puzzleId "${row.PuzzleId}"]\n[Opening "${row.OpeningTags||'?'}"]\n[StudyName "Custom PGN"]\n[ChapterName "${mainTheme} Exercise ${i+1}"]\n[ChapterURL "${row.GameUrl||''}"]\n[Annotator "CircleChess"]\n[FEN "${fixedFen}"]\n\n${side}\n${sanMoves}\n`
+      );
     });
-    res.type('text/plain').send(pgn);
+    res.type('text/plain').send(pgns.join('\n'));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -872,6 +869,174 @@ app.post('/api/curriculum/build', upload.array('images', 50), async (req, res) =
     res.json(curriculum);
   } catch (err) {
     console.error('Curriculum build error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Study Generator ───────────────────────────────────────────────────────────
+
+function buildStudyPGN(data) {
+  const date = new Date().toISOString().slice(0, 10).replace(/-/g, '.');
+  const parts = [];
+
+  const buildGame = (pos, label, idx) => {
+    let movesText = '';
+    try {
+      const chess = new Chess(pos.fen);
+      const lines = [];
+      const startSide = chess.turn();
+      for (let i = 0; i < (pos.moves || []).length; i++) {
+        const mv = pos.moves[i];
+        const side = chess.turn();
+        const num  = chess.moveNumber();
+        try {
+          const r = chess.move(mv.san);
+          if (!r) break;
+          let tok = side === 'w'
+            ? `${num}. ${r.san}`
+            : (i === 0 && startSide === 'b' ? `${num}... ${r.san}` : r.san);
+          if (mv.comment) tok += ` { ${mv.comment.replace(/[{}]/g, '-')} }`;
+          lines.push(tok);
+        } catch { break; }
+      }
+      movesText = lines.join(' ');
+    } catch { /* invalid fen — skip moves */ }
+
+    const header = [
+      `[Event "${label} ${idx}: ${(pos.title || data.topic || '').replace(/"/g, "'")}"]`,
+      `[Site "Chess Tools — CircleChess"]`,
+      `[Date "${date}"]`,
+      `[White "?"][Black "?"][Result "*"]`,
+      `[FEN "${pos.fen}"][SetUp "1"]`,
+      `[Annotator "GPT-4o / CircleChess"]`,
+    ].join('\n');
+
+    const body = pos.explanation
+      ? `{ ${pos.explanation.replace(/[{}]/g, '-')} }\n${movesText} *`
+      : `${movesText || '*'}`;
+
+    return `${header}\n\n${body}`;
+  };
+
+  parts.push(`% ════════════════════════════════════════`);
+  parts.push(`% Topic: ${data.title || data.topic}`);
+  parts.push(`% PART 1 — BOOK POSITIONS (${(data.bookPositions || []).length})`);
+  parts.push(`% ════════════════════════════════════════\n`);
+  (data.bookPositions || []).forEach((p, i) => { parts.push(buildGame(p, 'Book Position', i + 1)); parts.push(''); });
+
+  parts.push(`% ════════════════════════════════════════`);
+  parts.push(`% PART 2 — RELATED POSITIONS (${(data.relatedPositions || []).length})`);
+  parts.push(`% ════════════════════════════════════════\n`);
+  (data.relatedPositions || []).forEach((p, i) => { parts.push(buildGame(p, 'Related Position', i + 1)); parts.push(''); });
+
+  return parts.join('\n');
+}
+
+app.post('/api/study/generate', upload.array('images', 50), async (req, res) => {
+  if (!openai) return res.status(503).json({ error: 'OpenAI not configured' });
+  try {
+    const { topic } = req.body;
+    if (!topic?.trim()) return res.status(400).json({ error: 'topic required' });
+
+    let refText = '';
+    const refFens = [];
+
+    const files = req.files || [];
+    if (files.length) {
+      try {
+        const pts = req.body.pageTexts ? JSON.parse(req.body.pageTexts) : [];
+        refText = pts.filter(Boolean).join('\n\n');
+      } catch { /* ignore */ }
+
+      const fenBatches = await Promise.all(
+        files.slice(0, 20).map(async f => {
+          const mt = f.mimetype === 'image/jpg' ? 'image/jpeg' : f.mimetype;
+          try { return await extractAllFens(f.buffer, mt); } catch { return []; }
+        })
+      );
+      fenBatches.forEach(b => refFens.push(...b));
+
+      if (!refText) {
+        const ocr = await Promise.all(
+          files.slice(0, 5).map(f =>
+            imageToText(f.buffer, f.mimetype === 'image/jpg' ? 'image/jpeg' : f.mimetype)
+          )
+        );
+        refText = ocr.filter(Boolean).join('\n\n');
+      }
+    }
+
+    const refBlock = refText ? `REFERENCE MATERIAL (from uploaded PDFs):\n${refText.slice(0, 6000)}` : '';
+    const fenBlock = refFens.length
+      ? `POSITIONS FROM REFERENCE:\n${[...new Set(refFens)].slice(0, 10).join('\n')}`
+      : '';
+
+    const prompt = `You are an expert chess author creating an annotated study set.
+
+TOPIC: ${topic}
+${refBlock}
+${fenBlock}
+
+Generate a chess study with TWO parts.
+
+PART 1 — exactly 4 "Book Positions" (deeply annotated):
+- Each position must clearly illustrate the topic concept
+- Use REAL famous positions or established theoretical positions when possible
+- Include 4-8 annotated moves showing the key idea
+- Explanation should be 3-5 sentences
+
+PART 2 — exactly 10 "Related Positions" (briefly annotated):
+- Positions that demonstrate related aspects of the topic
+- 2-5 key moves each
+- 1-2 sentence explanation
+
+STRICT RULES:
+1. Every FEN must be a VALID chess position (correct board, castling rights, side-to-move)
+2. Every SAN move must be LEGAL from the given FEN position
+3. Move comments explain WHY (not just what)
+4. FEN side-to-move must match whose turn it is in the position
+
+Output ONLY valid JSON:
+{
+  "title": "...",
+  "topic": "...",
+  "description": "...",
+  "bookPositions": [
+    {
+      "id": 1,
+      "title": "Famous game or concept name",
+      "fen": "...",
+      "explanation": "...",
+      "moves": [
+        { "san": "h3", "comment": "Prophylactic — prevents Bg4" },
+        { "san": "e5", "comment": "Black breaks in the center" }
+      ]
+    }
+  ],
+  "relatedPositions": [
+    {
+      "id": 1,
+      "title": "...",
+      "fen": "...",
+      "explanation": "...",
+      "moves": [{ "san": "a3", "comment": "Preventing Nb4" }]
+    }
+  ]
+}`;
+
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4o',
+      max_tokens: 4096,
+      temperature: 0.2,
+      messages: [{ role: 'user', content: prompt }],
+      response_format: { type: 'json_object' },
+    });
+
+    const data = JSON.parse(completion.choices[0].message.content.trim());
+    const pgn = buildStudyPGN(data);
+    res.json({ ...data, pgn });
+  } catch (err) {
+    console.error('Study generate error:', err);
     res.status(500).json({ error: err.message });
   }
 });

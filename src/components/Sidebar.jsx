@@ -33,6 +33,12 @@ const NAV = [
     sub: 'Topic + PGN → infographic',
     icon: <span className="text-[20px] leading-none select-none flex-shrink-0">🖼️</span>,
   },
+  {
+    id: 'study',
+    label: 'Study Generator',
+    sub: 'Topic → annotated PGN',
+    icon: <span className="text-[20px] leading-none select-none flex-shrink-0">📚</span>,
+  },
 ];
 
 function NavItems({ page, choose }) {

@@ -119,6 +119,16 @@ function OpeningSelect({ openings, value, onChange }) {
   );
 }
 
+// ── Field label wrapper (defined OUTSIDE to avoid remount-on-rerender focus loss) ──
+function Field({ label, children }) {
+  return (
+    <div className="space-y-1.5">
+      <p className="text-[11px] font-semibold text-stone-500 uppercase tracking-wider">{label}</p>
+      {children}
+    </div>
+  );
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 export default function PuzzleGenerator() {
   const [themes, setThemes] = useState([]);
@@ -128,8 +138,8 @@ export default function PuzzleGenerator() {
 
   const [selectedThemes, setSelectedThemes] = useState([]);
   const [selectedOpening, setSelectedOpening] = useState('');
-  const [minRating, setMinRating] = useState(800);
-  const [maxRating, setMaxRating] = useState(2000);
+  const [minRating, setMinRating] = useState('800');
+  const [maxRating, setMaxRating] = useState('2000');
   const [count, setCount] = useState(20);
 
   const [pgn, setPgn] = useState('');
@@ -183,13 +193,6 @@ export default function PuzzleGenerator() {
     showToast('Copied to clipboard ✓');
     setTimeout(() => setCopied(false), 2000);
   };
-
-  const Field = ({ label, children }) => (
-    <div className="space-y-1.5">
-      <p className="text-[11px] font-semibold text-stone-500 uppercase tracking-wider">{label}</p>
-      {children}
-    </div>
-  );
 
   return (
     <div className="h-full overflow-y-auto" style={{ background: '#F5EFE6' }}>
@@ -246,14 +249,14 @@ export default function PuzzleGenerator() {
                   <Field label="Rating range">
                     <div className="flex items-center gap-2">
                       <input
-                        type="number" value={minRating} min={0} max={3000}
-                        onChange={e => setMinRating(+e.target.value)}
+                        type="text" inputMode="numeric" value={minRating}
+                        onChange={e => { if (/^\d*$/.test(e.target.value)) setMinRating(e.target.value); }}
                         className="flex-1 px-3 py-2.5 text-sm border border-stone-200 rounded-xl bg-amber-50/40 focus:outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-100 text-stone-800 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                       />
                       <span className="text-stone-400 text-xs flex-shrink-0">—</span>
                       <input
-                        type="number" value={maxRating} min={0} max={3000}
-                        onChange={e => setMaxRating(+e.target.value)}
+                        type="text" inputMode="numeric" value={maxRating}
+                        onChange={e => { if (/^\d*$/.test(e.target.value)) setMaxRating(e.target.value); }}
                         className="flex-1 px-3 py-2.5 text-sm border border-stone-200 rounded-xl bg-amber-50/40 focus:outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-100 text-stone-800 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                       />
                     </div>
