@@ -3,7 +3,6 @@ import Sidebar from './components/Sidebar';
 import PdfToPgn from './components/PdfToPgn';
 import PuzzleGenerator from './components/PuzzleGenerator';
 import OpeningExplorer from './components/OpeningExplorer';
-import CurriculumBuilder from './components/CurriculumBuilder';
 import ImageGenerator from './components/ImageGenerator';
 import StudyGenerator from './components/StudyGenerator';
 
@@ -35,7 +34,7 @@ export default function App() {
             Chess Tools
           </span>
           <span className="text-xs ml-1" style={{ color: '#6b5f58' }}>
-            — {{ pdf: 'PDF to PGN', puzzles: 'Puzzle Generator', opening: 'Opening Explorer', curriculum: 'Curriculum Builder', imagegen: 'Image Generator', study: 'Study Generator' }[page]}
+            — {{ pdf: 'PDF to PGN', puzzles: 'Puzzle Generator', opening: 'Opening Explorer', imagegen: 'Image Generator', study: 'Study Generator' }[page]}
           </span>
         </div>
 
@@ -44,7 +43,6 @@ export default function App() {
           {page === 'pdf'     && <PdfToPgn />}
           {page === 'puzzles' && <PuzzleGenerator />}
           {page === 'opening'     && <OpeningExplorer />}
-          {page === 'curriculum'  && <CurriculumBuilder />}
           {page === 'imagegen'    && <ImageGenerator />}
           {page === 'study'       && <StudyGenerator />}
         </div>

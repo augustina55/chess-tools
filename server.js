@@ -1094,6 +1094,13 @@ Rules: FENs must be valid. Arrow squares must be valid chess squares (a1-h8). Ou
   }
 });
 
+// ── Global error handler — always return JSON, never plain text ───────────────
+
+app.use((err, _req, res, _next) => {
+  console.error('Unhandled error:', err.message);
+  if (!res.headersSent) res.status(500).json({ error: err.message || 'Internal server error' });
+});
+
 // ── Static files (local production preview) ───────────────────────────────────
 
 const distPath = join(__dirname, 'dist');
